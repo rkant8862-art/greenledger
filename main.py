@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 GREEN LEDGER - Decentralized / Distributed Ledger (DLT) data store
-Only standard library is used. Run:  python ledger_app.py   ->  http://127.0.0.1:8000
+Only standard library is used. Local run:  python main.py   ->  http://127.0.0.1:8000
+Render: Start Command = python main.py  (uses $PORT, binds 0.0.0.0)
 
 Features: Add data, Download data, Remove data (tombstone block), 3 nodes, consensus sync.
 Dashboards: Overview, Data Vault, Coins, NFTs, Ledger Explorer, Network Nodes, Blockchain Visual (glowing node network).
@@ -10,7 +11,7 @@ import json, hashlib, time, base64, os, threading, webbrowser
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote
 
-DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ledger_data.json")
+DB = os.path.join(os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__))), "ledger_data.json")
 NODES = ["Node-A", "Node-B", "Node-C"]
 DIFF = 3                      # proof-of-work: hash must start with "000"
 MAX_B64 = 3 * 1024 * 1024     # ~2.2MB file limit
@@ -144,6 +145,11 @@ class H(BaseHTTPRequestHandler):
                 return self.reply(200, base64.b64decode(b["content"]), b["mime"] or "application/octet-stream",
                                   {"Content-Disposition": "inline; filename*=UTF-8''" + quote(fn)})
         self.reply(404, {"error": "not found"})
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
 
     def do_POST(self):
         try: d = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
@@ -464,12 +470,16 @@ async function addNft(){
 load();
 </script></body></html>'''
 
-# if __name__ == "__main__":
-#     load()
-#     port = 8000
-#     print(f"GREEN LEDGER running at -> http://127.0.0.1:{port}  (press Ctrl+C to stop)")
-#     threading.Timer(1, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
-#     try:
-#         ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
-#     except KeyboardInterrupt:
-#         print("\nBye!")
+if __name__ == "__main__":
+    os.makedirs(os.path.dirname(DB), exist_ok=True)
+    load()
+    port = int(os.environ.get("PORT", 8000))
+    on_render = bool(os.environ.get("PORT") or os.environ.get("RENDER"))
+    host = "0.0.0.0" if on_render else "127.0.0.1"
+    print(f"GREEN LEDGER running at -> http://{host}:{port}  (press Ctrl+C to stop)", flush=True)
+    if not on_render:
+        threading.Timer(1, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
+    try:
+        ThreadingHTTPServer((host, port), H).serve_forever()
+    except KeyboardInterrupt:
+        print("\nBye!")
